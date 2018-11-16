@@ -21,6 +21,10 @@ import Agda.Compiler.JS.Syntax hiding (exports)
 br :: Int -> String
 br i = "\n" ++ replicate (2*i) ' '
 
+parens :: Bool -> String -> String
+parens True s = "(" ++ s ++ ")"
+parens False s = s
+
 unescape :: Char -> String
 unescape '"'      = "\\\""
 unescape '\\'     = "\\\\"
@@ -77,9 +81,8 @@ instance Pretty Exp where
   pretty n i (Integer x)            = "agdaRTS.primIntegerFromString(\"" ++ show x ++ "\")"
   pretty n i (Double x)             = show x
   pretty n i (Lambda x e)           =
-    "function (" ++
-      intercalate ", " (pretties (n+x) i (map LocalId [x-1, x-2 .. 0])) ++
-    ") " ++ block (n+x) i e
+    parens (x /= 1) (intercalate ", " (pretties (n+x) i (map LocalId [x-1, x-2 .. 0]))) ++
+    " => " ++ block (n+x) i e
   pretty n i (Object o) | null o    = "{}"
   pretty n i (Object o) | otherwise =
     "{" ++ br (i+1) ++ intercalate ("," ++ br (i+1)) (pretties n i o) ++ br i ++ "}"
@@ -93,12 +96,12 @@ instance Pretty Exp where
   pretty n i (PlainJS js)           = "(" ++ js ++ ")"
 
 block :: Nat -> Int -> Exp -> String
-block n i (If e f g) = "{" ++ br (i+1) ++ block' n (i+1) (If e f g) ++ br i ++ "}"
-block n i e          = "{" ++ br (i+1) ++ "return " ++ pretty n (i+1) e ++ ";" ++ br i ++ "}"
-
-block' :: Nat -> Int -> Exp -> String
-block' n i (If e f g) = "if (" ++ pretty n i e ++ ") " ++ block n i f ++ " else " ++ block' n i g
-block' n i e          = block n i e
+block n i e
+  | nest e  = "(" ++ br (i+1) ++ pretty n (i+1) e ++ br i ++ ")"
+  | otherwise = pretty n i e
+  where
+    nest Lambda{} = False
+    nest _ = True
 
 modname :: GlobalId -> String
 modname (GlobalId ms) = "\"" ++ intercalate "." ms ++ "\""
