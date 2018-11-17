@@ -89,7 +89,7 @@ instance (Uses a, Uses b, Uses c) => Uses (a, b, c) where
 
 instance Uses Exp where
   uses (Object o)     = uses o
-  uses (Array es)     = foldr (union . uses) empty es
+  uses (Array es)     = uses es
   uses (Apply e es)   = uses (e, es)
   uses (Lookup e l)   = uses' e [l] where
       uses' Self         ls = Set.singleton ls
