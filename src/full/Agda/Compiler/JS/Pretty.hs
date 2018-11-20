@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 module Agda.Compiler.JS.Pretty where
 
 import Data.Char ( isAsciiLower, isAsciiUpper, isDigit )
@@ -12,11 +11,9 @@ import Data.Map ( Map, toAscList )
 import Agda.Syntax.Common ( Nat )
 import Agda.Utils.Hash
 import Agda.Utils.List ( indexWithDefault )
+import Agda.Utils.Impossible
 
 import Agda.Compiler.JS.Syntax hiding (exports)
-
-#include "undefined.h"
-import Agda.Utils.Impossible ( Impossible(Impossible), throwImpossible )
 
 -- Pretty-print a lambda-calculus expression as ECMAScript.
 
@@ -241,6 +238,11 @@ exports n lss (Export ls e : es) | member (init ls) lss =
   exports n (insert ls lss) es
 exports n lss (Export ls e : es) | otherwise =
   exports n lss (Export (init ls) (Object mempty) : Export ls e : es)
+
+instance Pretty [(GlobalId, Export)] where
+  pretty n es
+    = vcat [ pretty n g <> hcat (map brackets (pretties n ls)) <> space <> "=" <> space <> indent (pretty n e) <> ";"
+           | (g, Export ls e) <- es ]
 
 instance Pretty Module where
   pretty n (Module m is es ex) =

@@ -1,7 +1,6 @@
 module Agda.Compiler.JS.Compiler where
 
 import Prelude hiding ( null, writeFile )
-
 import Control.Monad.Trans
 
 import Data.Char ( isSpace )
@@ -35,7 +34,7 @@ import Agda.TypeChecking.Reduce ( instantiateFull )
 import Agda.TypeChecking.Pretty
 import Agda.Utils.List ( headWithDefault )
 import Agda.Utils.Maybe
-import Agda.Utils.Monad ( ifM )
+import Agda.Utils.Monad ( ifM, when )
 import Agda.Utils.Pretty (prettyShow)
 import qualified Agda.Utils.Pretty as P
 import Agda.Utils.IO.Directory
@@ -65,7 +64,7 @@ import Agda.Utils.Impossible (__IMPOSSIBLE__)
 jsBackend :: Backend
 jsBackend = Backend jsBackend'
 
-jsBackend' :: Backend' JSOptions JSOptions JSModuleEnv () (Maybe Export)
+jsBackend' :: Backend' JSOptions JSOptions JSModuleEnv Module (Maybe Export)
 jsBackend' = Backend'
   { backendName           = jsBackendName
   , backendVersion        = Nothing
@@ -92,6 +91,7 @@ data JSOptions = JSOptions
   { optJSCompile :: Bool
   , optJSOptimize :: Bool
   , optJSMinify :: Bool
+  , optJSOutput :: Maybe String
   }
 
 defaultJSOptions :: JSOptions
@@ -99,6 +99,7 @@ defaultJSOptions = JSOptions
   { optJSCompile = False
   , optJSOptimize = False
   , optJSMinify = False
+  , optJSOutput = Nothing
   }
 
 jsCommandLineFlags :: [OptDescr (Flag JSOptions)]
@@ -106,32 +107,46 @@ jsCommandLineFlags =
     [ Option [] ["js"] (NoArg enable) "compile program using the JS backend"
     , Option [] ["js-optimize"] (NoArg enableOpt) "turn on optimizations during JS code generation"
     , Option [] ["js-minify"] (NoArg enableMin) "minify generated JS code"
+    , Option [] ["js-output"] (ReqArg outputFileFlag "FILE") "write concatenated JS code to file"
     ]
   where
     enable o = pure o{ optJSCompile = True }
     enableOpt o = pure o{ optJSOptimize = True }
     enableMin o = pure o{ optJSMinify = True }
+    outputFileFlag f o = pure o{ optJSOutput = Just f }
 
 --- Top-level compilation ---
 
 jsPreCompile :: JSOptions -> TCM JSOptions
 jsPreCompile opts = return opts
 
-jsPostCompile :: JSOptions -> IsMain -> a -> TCM ()
-jsPostCompile _ _ _ = copyRTEModules
+jsPostCompile :: JSOptions -> IsMain -> Map.Map ModuleName Module -> TCM ()
+jsPostCompile opts _ ms = case optJSOutput opts of
+    Nothing -> copyRTEModules
+    Just output -> do
+      liftIO $ writeFile output $ JSPretty.prettyShow (optJSMinify opts) $ mergeModules ms
+
+mergeModules :: Map.Map ModuleName Module -> [(GlobalId, Export)]
+mergeModules ms
+    = [ (jsMod n, e)
+      | (n, Module _ _ es _) <- Map.toList ms
+      , e <- es
+      ]
 
 --- Module compilation ---
 
 type JSModuleEnv = Maybe CoinductionKit
 
-jsPreModule :: JSOptions -> IsMain -> ModuleName -> FilePath -> TCM (Recompile JSModuleEnv ())
-jsPreModule _ _ m ifile = ifM uptodate noComp yesComp
+jsPreModule :: JSOptions -> IsMain -> ModuleName -> FilePath -> TCM (Recompile JSModuleEnv Module)
+jsPreModule opts _ m ifile = ifM uptodate noComp yesComp
   where
-    uptodate = liftIO =<< isNewerThan <$> outFile_ <*> pure ifile
+    uptodate
+        | isNothing $ optJSOutput opts = liftIO =<< isNewerThan <$> outFile_ <*> pure ifile
+        | otherwise = pure False
 
     noComp = do
       reportSLn "compile.js" 2 . (++ " : no compilation is needed.") . prettyShow =<< curMName
-      return $ Skip ()
+      return $ Skip __IMPOSSIBLE__
 
     yesComp = do
       m   <- prettyShow <$> curMName
@@ -139,12 +154,14 @@ jsPreModule _ _ m ifile = ifM uptodate noComp yesComp
       reportSLn "compile.js" 1 $ repl [m, ifile, out] "Compiling <<0>> in <<1>> to <<2>>"
       Recompile <$> coinductionKit
 
-jsPostModule :: JSOptions -> JSModuleEnv -> IsMain -> ModuleName -> [Maybe Export] -> TCM ()
+jsPostModule :: JSOptions -> JSModuleEnv -> IsMain -> ModuleName -> [Maybe Export] -> TCM Module
 jsPostModule opts _ isMain _ defs = do
   m             <- jsMod <$> curMName
   is            <- map (jsMod . fst) . iImportedModules <$> curIF
   let es = catMaybes defs
-  writeModule (optJSMinify opts) $ Module m is (reorder es) main
+      mod = Module m is (reorder es) main
+  when (isNothing $ optJSOutput opts) $ writeModule (optJSMinify opts) mod
+  return mod
   where
     main = case isMain of
       IsMain  -> Just $ Apply (Lookup Self $ MemberId "main") [Lambda 1 emp]
