@@ -33,7 +33,7 @@ data Exp =
   PreOp String Exp |
   Const String |
   PlainJS String -- ^ Arbitrary JS code.
-  deriving Show
+  deriving (Show, Eq)
 
 -- Local identifiers are named by De Bruijn indices.
 -- Global identifiers are named by string lists.
@@ -45,7 +45,9 @@ newtype LocalId = LocalId Nat
 newtype GlobalId = GlobalId [String]
   deriving (Eq, Ord, Show)
 
-newtype MemberId = MemberId String
+data MemberId
+    = MemberId String
+    | MemberIndex Int
   deriving (Eq, Ord, Show)
 
 -- The top-level compilation unit is a module, which names

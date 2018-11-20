@@ -8,7 +8,7 @@ import qualified Data.List as List
 
 import Agda.Syntax.Common ( Nat )
 import Agda.Compiler.JS.Syntax
-  ( Exp(Self,Undefined,Local,Lambda,Object,Apply,Lookup,If,BinOp,PreOp),
+  ( Exp(Self,Undefined,Local,Lambda,Object,Array,Apply,Lookup,If,BinOp,PreOp),
     MemberId, LocalId(LocalId) )
 import Agda.Utils.Function ( iterate' )
 import Agda.Utils.List ( indexWithDefault )

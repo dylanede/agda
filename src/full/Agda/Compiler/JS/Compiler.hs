@@ -49,8 +49,8 @@ import Agda.Compiler.Treeless.GuardsToPrims
 import Agda.Compiler.Backend (Backend(..), Backend'(..), Recompile(..))
 
 import Agda.Compiler.JS.Syntax
-  ( Exp(Self,Local,Global,Undefined,Null,String,Char,Integer,Double,Lambda,Object,Apply,Lookup,If,BinOp,PlainJS),
-    LocalId(LocalId), GlobalId(GlobalId), MemberId(MemberId), Export(Export), Module(Module),
+  ( Exp(Self,Local,Global,Undefined,Null,String,Char,Integer,Double,Lambda,Object,Array,Apply,Lookup,If,BinOp,PlainJS),
+    LocalId(LocalId), GlobalId(GlobalId), MemberId(MemberId,MemberIndex), Export(Export), Module(Module),
     modName, expName, uses )
 import Agda.Compiler.JS.Substitution
   ( curriedLambda, curriedApply, emp, apply )
@@ -337,10 +337,16 @@ definition' kit q d t ls = do
           where
             wrapRecord e | optJSOptimize (fst kit) = e
                          | otherwise = Object $ fromList [ (last ls, e) ]
-        _ ->
+        dt ->
           ret (curriedLambda (np + 1)
-            (Apply (Lookup (Local (LocalId 0)) (last ls))
+            (Apply (Lookup (Local (LocalId 0)) index)
               [ Local (LocalId (np - i)) | i <- [0 .. np-1] ]))
+          where
+            index | Datatype{} <- dt
+                  , optJSOptimize (fst kit)
+                  , cs <- defConstructors dt
+                  = MemberIndex $ headWithDefault __IMPOSSIBLE__ [ i | (i, x) <- zip [0..] cs, x == q ]
+                  | otherwise = last ls
 
     AbstractDefn{} -> __IMPOSSIBLE__
   where
@@ -385,7 +391,9 @@ compileTerm kit t = go t
       T.TCase sc ct def alts | T.CTData dt <- T.caseType ct -> do
         dt <- getConstInfo dt
         alts' <- traverse (compileAlt kit) alts
-        let obj = Object $ Map.fromList alts'
+        let cs  = defConstructors $ theDef dt
+            obj = Object $ Map.fromList [(snd x, y) | (x, y) <- alts']
+            arr = mkArray [headWithDefault Null [y | ((c', _), y) <- alts', c' == c] | c <- cs]
         case (theDef dt, defJSDef dt) of
           (_, Just e) -> do
             return $ apply (PlainJS e) [Local (LocalId sc), obj]
@@ -394,6 +402,8 @@ compileTerm kit t = go t
           (Record{}, _) -> do
             memId <- visitorName $ recCon $ theDef dt
             return $ apply (Lookup (Local $ LocalId sc) memId) [obj]
+          (Datatype{}, _) | optJSOptimize (fst kit) -> do
+            return $ curriedApply (Local (LocalId sc)) [arr]
           (Datatype{}, _) -> do
             return $ curriedApply (Local (LocalId sc)) [obj]
           _ -> __IMPOSSIBLE__
@@ -407,6 +417,10 @@ compileTerm kit t = go t
       T.TCoerce t -> go t
 
     unit = return Null
+
+    mkArray xs
+        | 2 * length (filter (==Null) xs) <= length xs = Array xs
+        | otherwise = Object $ Map.fromList [(MemberIndex i, x) | (i, x) <- zip [0..] xs, x /= Null]
 
 compilePrim :: T.TPrim -> Exp
 compilePrim p =
@@ -439,12 +453,12 @@ compilePrim p =
         primEq   = curriedLambda 2 $ BinOp (local 1) "===" (local 0)
 
 
-compileAlt :: EnvWithOpts -> T.TAlt -> TCM (MemberId, Exp)
+compileAlt :: EnvWithOpts -> T.TAlt -> TCM ((QName, MemberId), Exp)
 compileAlt kit a = case a of
   T.TACon con ar body -> do
     memId <- visitorName con
     body <- Lambda ar <$> compileTerm kit body
-    return (memId, body)
+    return ((con, memId), body)
   _ -> __IMPOSSIBLE__
 
 visitorName :: QName -> TCM MemberId

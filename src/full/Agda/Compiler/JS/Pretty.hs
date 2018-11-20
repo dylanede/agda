@@ -169,7 +169,8 @@ instance Pretty GlobalId where
   pretty n (GlobalId m) = text $ variableName $ intercalate "_" m
 
 instance Pretty MemberId where
-  pretty n (MemberId s) = "\"" <> unescapes s <> "\""
+  pretty _ (MemberId s) = "\"" <> unescapes s <> "\""
+  pretty _ (MemberIndex i) = text $ show i
 
 -- Pretty print expressions
 
