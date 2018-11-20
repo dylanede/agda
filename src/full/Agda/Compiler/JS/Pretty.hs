@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 module Agda.Compiler.JS.Pretty where
 
 import Data.Char ( isAsciiLower, isAsciiUpper, isDigit )
@@ -11,8 +11,12 @@ import Data.Map ( Map, toAscList )
 
 import Agda.Syntax.Common ( Nat )
 import Agda.Utils.Hash
+import Agda.Utils.List ( indexWithDefault )
 
 import Agda.Compiler.JS.Syntax hiding (exports)
+
+#include "undefined.h"
+import Agda.Utils.Impossible ( Impossible(Impossible), throwImpossible )
 
 -- Pretty-print a lambda-calculus expression as ECMAScript.
 
@@ -180,7 +184,9 @@ instance (Pretty a, Pretty b) => Pretties (Map a b) where
 -- Pretty print identifiers
 
 instance Pretty LocalId where
-  pretty (n, _) (LocalId x) = "x" <> text (show $ n - x - 1)
+  pretty (n, _) (LocalId x) = text $ indexWithDefault __IMPOSSIBLE__ vars (n - x - 1)
+    where
+      vars = ("": map show [0..]) >>= \s -> map (:s) ['a'..'z']
 
 instance Pretty GlobalId where
   pretty n (GlobalId m) = text $ variableName $ intercalate "_" m
