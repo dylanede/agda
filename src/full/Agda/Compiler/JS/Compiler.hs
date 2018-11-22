@@ -243,7 +243,7 @@ reorder es = datas ++ funs ++ reorder' (Set.fromList $ map expName $ datas ++ fu
 reorder' :: Set [MemberId] -> [Export] -> [Export]
 reorder' defs [] = []
 reorder' defs (e : es) =
-  let us = uses e `difference` defs
+  let us = Set.map snd (uses e) `difference` defs
   in  if null us
         then e : (reorder' (insert (expName e) defs) es)
         else reorder' defs (insertAfter us e es)

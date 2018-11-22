@@ -3,10 +3,10 @@
 
 module Agda.Compiler.JS.Syntax where
 
+import Data.Maybe ( catMaybes )
 import Data.Foldable (foldMap)
 import Data.Map (Map)
 import qualified Data.Map as Map
-
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -75,12 +75,10 @@ data Module = Module
 -- Note that modules are allowed to be recursive, via the Self expression,
 -- which is bound to the exported module.
 
--- Top-level uses of the form exports.l1....lN.
-
 class Uses a where
-  uses :: a -> Set [MemberId]
+  uses :: a -> Set (Maybe GlobalId, [MemberId])
 
-  default uses :: (a ~ t b, Foldable t, Uses b) => a -> Set [MemberId]
+  default uses :: (a ~ t b, Foldable t, Uses b) => a -> Set (Maybe GlobalId, [MemberId])
   uses = foldMap uses
 
 instance Uses a => Uses [a]
@@ -96,11 +94,13 @@ instance Uses Comment where
   uses _ = Set.empty
 
 instance Uses Exp where
+  uses (Lambda n e)   = uses e
   uses (Object o)     = uses o
   uses (Array es)     = uses es
   uses (Apply e es)   = uses (e, es)
   uses (Lookup e l)   = uses' e [l] where
-      uses' Self         ls = Set.singleton ls
+      uses' Self         ls = Set.singleton (Nothing, ls)
+      uses' (Global i)   ls = Set.singleton (Just i, ls)
       uses' (Lookup e l) ls = uses' e (l : ls)
       uses' e            ls = uses e
   uses (If e f g)     = uses (e, f, g)
@@ -111,41 +111,10 @@ instance Uses Exp where
 instance Uses Export where
   uses (Export _ e) = uses e
 
--- All global ids
+instance Uses Module where
+  uses (Module _ _ es _) = uses es
 
-class Globals a where
-  globals :: a -> Set GlobalId
+-- Top-level uses of the form exports.l1....lN.
+globals :: Uses a => a -> Set GlobalId
+globals = Set.fromList . catMaybes . map fst . Set.toList . uses
 
-  default globals :: (a ~ t b, Foldable t, Globals b) => a -> Set GlobalId
-  globals = foldMap globals
-
-instance Globals a => Globals [a]
-instance Globals a => Globals (Maybe a)
-instance Globals a => Globals (Map k a)
-
-instance (Globals a, Globals b) => Globals (a, b) where
-  globals (a, b) = globals a `Set.union` globals b
-
-instance (Globals a, Globals b, Globals c) => Globals (a, b, c) where
-  globals (a, b, c) = globals a `Set.union` globals b `Set.union` globals c
-
-instance Globals Comment where
-  globals _ = Set.empty
-
-instance Globals Exp where
-  globals (Global i) = Set.singleton i
-  globals (Lambda n e) = globals e
-  globals (Object o) = globals o
-  globals (Array es) = globals es
-  globals (Apply e es) = globals (e, es)
-  globals (Lookup e l) = globals e
-  globals (If e f g) = globals (e, f, g)
-  globals (BinOp e op f) = globals (e, f)
-  globals (PreOp op e) = globals e
-  globals _ = Set.empty
-
-instance Globals Export where
-  globals (Export _ e) = globals e
-
-instance Globals Module where
-  globals (Module _ _ es me) = globals (es, me)
