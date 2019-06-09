@@ -4,6 +4,7 @@ module Agda.Compiler.JS.Pretty where
 import Data.Char ( isAsciiLower, isAsciiUpper, isDigit )
 import Data.List ( intercalate )
 import Data.String ( IsString (fromString) )
+import Data.Semigroup ( Semigroup, (<>) )
 import Data.Set ( Set, toList, singleton, insert, member )
 import qualified Data.Set as Set
 import Data.Map ( Map, toAscList )
@@ -71,6 +72,7 @@ instance Semigroup Doc where
 
 instance Monoid Doc where
     mempty = Empty
+    mappend = (<>)
 
 infixl 5 $+$
 
