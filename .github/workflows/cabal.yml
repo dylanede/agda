@@ -80,5 +80,5 @@ jobs:
         path: dist-newstyle
     - name: Check the existence of Agda
       run: |
-        cabal exec -- which agda
+        cabal exec -- env
 
