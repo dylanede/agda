@@ -68,6 +68,10 @@ jobs:
       FLAGS_2: "--flag Agda:enable-cluster-counting"
     steps:
     - uses: actions/checkout@v2
+    - name: Install text-icu
+      run: |
+        brew install icu4c
+        printf "extra-lib-dirs:\n - /usr/local/opt/icu4c/lib\n extra-include-dirs:\n - /usr/local/opt/icu4c/include" >> ~/.stack/config.yaml
     - name: Install stack
       run: |
         brew install haskell-stack
