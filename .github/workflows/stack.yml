@@ -55,6 +55,31 @@ jobs:
         name: agda-linux-${{ matrix.ghc-ver }}
         path: upload
 
+  mac:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        ghc-ver: [8.8.3]
+    env:
+      ARGS: "--stack-yaml stack-${{ matrix.ghc-ver }}.yaml --no-terminal --system-ghc --fast"
+      FLAGS_1: "--flag Agda:enable-cluster-counting --flag Agda:cpphs --flag Agda:debug"
+      FLAGS_2: "--flag Agda:enable-cluster-counting"
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-haskell@v1
+      with:
+        ghc-version: ${{ matrix.ghc-ver }}
+    - name: Install dependencies
+      run: |
+        stack build ${ARGS} ${FLAGS_1} --only-dependencies
+    - name: Build Agda with -fenable-cluster-counting -fcpphs -fdebug
+      run: |
+        stack build ${ARGS} ${FLAGS_1}
+    - name: Build Agda with -fenable-cluster-counting
+      run: |
+        stack build ${ARGS} ${FLAGS_2}
+
   windows:
     runs-on: windows-latest
     strategy:
