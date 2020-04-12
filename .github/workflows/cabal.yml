@@ -37,6 +37,11 @@ jobs:
       run: |
         cabal new-build -j
 
+    - name: Upload cabal store
+      uses: actions/upload-artifact@v1
+      with:
+        name: cabal-store
+        path: "~/.cabal"
     - name: Upload Agda artefact
       uses: actions/upload-artifact@v1
       with:
@@ -52,6 +57,11 @@ jobs:
       with:
         ghc-version: ${{ matrix.ghc-ver }}
         cabal-version: '3.0'
+    - name: Download cabal store
+      uses: actions/download-artifact@v1
+      with:
+        name: cabal-store
+        path: "~/.cabal"
     - uses: actions/download-artifact@v1
       with:
         name: agda-binary
