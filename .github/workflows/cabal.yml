@@ -48,6 +48,10 @@ jobs:
     needs: build
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/setup-haskell@v1
+      with:
+        ghc-version: ${{ matrix.ghc-ver }}
+        cabal-version: '3.0'
     - uses: actions/download-artifact@v1
       with:
         name: agda-binary
